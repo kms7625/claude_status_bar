@@ -15,12 +15,24 @@ git_branch=""
 if [ -n "$workspace_dir" ] && [ -d "$workspace_dir" ]; then
   git_branch=$(git -C "$workspace_dir" rev-parse --abbrev-ref HEAD 2>/dev/null)
 fi
+# epoch 초 → 시각 문자열 (GNU date: Windows Git Bash·Linux / BSD date: macOS)
+fmt_ts() {
+  if date --version >/dev/null 2>&1; then
+    date -d "@$1" "+$2" 2>/dev/null
+  else
+    date -r "$1" "+$2" 2>/dev/null
+  fi
+}
 # 4. 사용량 퍼센트 (5시간 현재 / 7일 주간)
 five_hour_pct=$(echo "$input" | jq -r '.rate_limits.five_hour.used_percentage // empty')
 seven_day_pct=$(echo "$input" | jq -r '.rate_limits.seven_day.used_percentage // empty')
 five_hour_reset_ts=$(echo "$input" | jq -r '.rate_limits.five_hour.resets_at // empty')
 if [ -n "$five_hour_reset_ts" ]; then
-  five_hour_reset_time=$(date -r "$five_hour_reset_ts" "+%H:%M" 2>/dev/null)
+  five_hour_reset_time=$(fmt_ts "$five_hour_reset_ts" "%H:%M")
+fi
+seven_day_reset_ts=$(echo "$input" | jq -r '.rate_limits.seven_day.resets_at // empty')
+if [ -n "$seven_day_reset_ts" ]; then
+  seven_day_reset_time=$(fmt_ts "$seven_day_reset_ts" "%m/%d %H:%M")
 fi
 if [ -n "$five_hour_pct" ]; then
   five_hour_display=$(awk -v p="$five_hour_pct" 'BEGIN{printf "%.0f%%", p}')
@@ -32,6 +44,9 @@ else
 fi
 if [ -n "$seven_day_pct" ]; then
   seven_day_display=$(awk -v p="$seven_day_pct" 'BEGIN{printf "%.0f%%", p}')
+  if [ -n "$seven_day_reset_time" ]; then
+    seven_day_display="${seven_day_display} (~${seven_day_reset_time})"
+  fi
 else
   seven_day_display="--"
 fi
